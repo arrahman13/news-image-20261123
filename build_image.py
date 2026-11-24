@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Render the news-image-20261123 broadsheet (1024x1024 PNG).
 
-Fresh build for Monday 23 November 2026. All art is drawn in code with
-Pillow; no photos, no downloads, no network. Deterministic output:
-fixed fonts, fixed layout, no timestamps, no randomness.
+Fresh build for Monday 23 November 2026. Page art is drawn in code with
+Pillow; the three lead stories use photorealistic images loaded from
+assets/lead1.jpg .. lead3.jpg (AI illustrations, captioned as such).
+No downloads, no network. Deterministic output: fixed fonts, fixed
+layout, no timestamps, no randomness.
 """
 import hashlib
 import os
@@ -162,6 +164,28 @@ def draw_map(draw, x0, y0, w, h):
         draw.text((px - tw / 2, py - 6 if big else py - 5), str(n), font=f,
                   fill=(255, 255, 255) if n <= 3 else (178, 24, 24))
 
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+LEAD_PHOTOS = ["lead1.jpg", "lead2.jpg", "lead3.jpg"]
+
+def lead_photo(idx, w, h):
+    """Center-crop lead photo idx to exactly w x h, with a small
+    'PHOTO: AI ILLUSTRATION' caption in the bottom-right corner."""
+    p = Image.open(os.path.join(ASSETS, LEAD_PHOTOS[idx])).convert("RGB")
+    sw, sh = p.size
+    scale = max(w / sw, h / sh)
+    nw, nh = max(w, round(sw * scale)), max(h, round(sh * scale))
+    p = p.resize((nw, nh), Image.LANCZOS)
+    left, top = (nw - w) // 2, (nh - h) // 2
+    p = p.crop((left, top, left + w, top + h))
+    cap = "PHOTO: AI ILLUSTRATION"
+    cf = F_SANS_B(7)
+    tw = int(ImageDraw.Draw(p).textlength(cap, font=cf))
+    ov = Image.new("RGBA", p.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    od.rectangle([w - tw - 8, h - 12, w, h], fill=(0, 0, 0, 150))
+    od.text((w - tw - 4, h - 10), cap, font=cf, fill=(255, 255, 255, 255))
+    return Image.alpha_composite(p.convert("RGBA"), ov).convert("RGB")
+
 def main():
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
@@ -204,23 +228,8 @@ def main():
     lh = 168
     for i, (n, head, body, outlet, tag, col) in enumerate(LEADS):
         x = M + i * (lw + 12)
-        d.rectangle([x, ly, x + lw, ly + 62], fill=col)
-        # simple illustration: bars / waves / blockade
-        if i == 0:
-            base = ly + 52
-            for j, bh in enumerate((14, 24, 18, 34, 44)):
-                d.rectangle([x + 16 + j * 22, base - bh, x + 30 + j * 22, base], fill=(255, 255, 255))
-            d.line([(x + 10, base - 46), (x + lw - 12, base - 52)], fill=(255, 210, 60), width=3)
-        elif i == 1:
-            d.polygon([(x + 60, ly + 44), (x + 150, ly + 44), (x + 165, ly + 20), (x + 45, ly + 20)], fill=(255, 255, 255))
-            d.rectangle([x + 95, ly + 8, x + 100, ly + 20], fill=(255, 255, 255))
-            for j in range(4):
-                d.arc([x + 20 + j * 55, ly + 46, x + 60 + j * 55, ly + 60], 0, 180, fill=(255, 255, 255), width=2)
-        else:
-            for j in range(3):
-                d.rectangle([x + 30 + j * 70, ly + 26, x + 70 + j * 70, ly + 44], fill=(255, 255, 255))
-                d.rectangle([x + 44 + j * 70, ly + 12, x + 48 + j * 70, ly + 26], fill=(255, 255, 255))
-            d.line([(x + 12, ly + 50), (x + lw - 12, ly + 50)], fill=(255, 210, 60), width=2)
+        # photorealistic lead image (assets/lead<i+1>.jpg) fills the art box
+        img.paste(lead_photo(i, lw, 62), (x, ly))
         d.rectangle([x, ly + 62, x + lw, ly + 84], fill=RED)
         d.text((x + 8, ly + 67), "LEAD %d" % n, font=F_SANS_B(12), fill=(255, 255, 255))
         # headline wrapped to 2 lines max
